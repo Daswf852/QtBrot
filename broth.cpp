@@ -291,56 +291,96 @@ void Broth::OptimisedMTWorker(size_t threadID) {
     std::cout<<"Worker "<<threadID<<" is stopping"<<std::endl;
 }
 
-//Just a sloppy OpenCL worker
-//No guarantees whatsoever for anything, might burn your gpu for all i care
-void Broth::CLWorker() {
-    std::cout<<"CLWorker is starting"<<std::endl;
+cl::Kernel Broth::LoadCLKernel() {
+    if (!isCLSetUp) SetupCLDevice();
+    assert(isCLSetUp);
 
+    std::string kernelSource;
+    std::ifstream ifs(kernelPath);
+
+    if (!ifs.is_open() || kernelPath == "default") {
+        kernelSource = defaultKernel;
+    } else{
+        std::ostringstream oss;
+        oss<<ifs.rdbuf();
+        kernelSource = oss.str();
+    }
+
+    if (ifs.is_open()) ifs.close();
+
+    cl::Program::Sources progSources;
+    progSources.push_back({kernelSource.c_str(), kernelSource.size()});
+
+    cl::Program program(clContext, progSources);
+    if (program.build({clDevice}, "") != CL_SUCCESS) {
+        std::cout<<program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(clDevice)<<std::endl;
+        if (program.build({clDevice}) != CL_SUCCESS) {
+            //something is wrong i can feel it
+            assert (!(kernelPath == "default" && program.build({clDevice}) != CL_SUCCESS));
+
+            kernelPath = "default";
+            return LoadCLKernel();
+        }
+    }
+
+    cl::Kernel programKernel(program, "mandelkernel");
+    return programKernel;
+}
+
+void Broth::SetupCLDevice() {
     std::vector<cl::Platform> platforms;
     cl::Platform::get(&platforms);
-    assert(platforms.size() != 0); //asserting. fight me.
+
+    //assert(platforms.size() != 0); //asserting. fight me.
+    if (platforms.size() == 0) {
+        std::cout<<"OpenCL could not be set up. No OpenCL platforms are found"<<std::endl;
+        isCLSetUp = false;
+        return;
+    }
+
     cl::Platform platform = platforms.at(0);
 
     std::cout<<"CL platform: "<<platform.getInfo<CL_PLATFORM_NAME>()<<std::endl;
 
     std::vector<cl::Device> devices;
     platform.getDevices(CL_DEVICE_TYPE_ALL, &devices);
-    assert(devices.size() != 0); // :^)
-    cl::Device device = devices.at(0);
 
-    std::cout<<"CL device: "<<device.getInfo<CL_DEVICE_NAME>()<<std::endl;
-
-    cl::Context context({device});
-
-    cl::Program::Sources progSources;
-
-    std::ifstream ifs("/home/daswf852/Development/QtBrot/kernel.cl");
-    assert (ifs.is_open());
-    std::ostringstream oss;
-    oss<<ifs.rdbuf();
-    std::string kernelCode = oss.str();
-    oss.str("");
-    ifs.close();
-
-    progSources.push_back({kernelCode.c_str(), kernelCode.size()});
-
-    cl::Program program(context, progSources);
-    if (program.build({device}, "") != CL_SUCCESS) {
-        std::cout<<program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device)<<std::endl;
-        assert(program.build({device}) == CL_SUCCESS);
+    //assert(devices.size() != 0); // :^)
+    if (devices.size() == 0) {
+        std::cout<<"OpenCL could not be set up. No OpenCL devices are found"<<std::endl;
+        isCLSetUp = false;
+        return;
     }
-    cl::Kernel programKernel(program, "mandelkernel");
+
+    clDevice = devices.at(0);
+
+    std::cout<<"CL device: "<<clDevice.getInfo<CL_DEVICE_NAME>()<<std::endl;
+
+    maxGroups = clDevice.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>();
+
+    clContext = cl::Context({clDevice});
+
+    isCLSetUp = true;
+}
+
+//Just a sloppy OpenCL worker
+//No guarantees whatsoever for anything, might burn your gpu for all i care
+void Broth::CLWorker() {
+    std::cout<<"CLWorker is starting"<<std::endl;
+
+    cl::Kernel programKernel = LoadCLKernel();
 
     unsigned int bufferSize = window->getSize().x * window->getSize().y;
 
     //C buffer
-    uint8_t *CBuffer = new uint8_t[bufferSize];
-    std::fill(CBuffer, CBuffer + bufferSize, 0);
+    //uint8_t *CBuffer = new uint8_t[bufferSize];
+    std::unique_ptr<uint8_t[]> CBuffer = std::make_unique<uint8_t[]>(bufferSize);
+    std::fill(&CBuffer[0], &CBuffer[bufferSize], 0);
 
     //CL buffer
-    cl::Buffer outBuffer(context, CL_MEM_WRITE_ONLY | CL_MEM_HOST_READ_ONLY, sizeof(uint8_t)*bufferSize);
+    cl::Buffer outBuffer(clContext, CL_MEM_WRITE_ONLY | CL_MEM_HOST_READ_ONLY, sizeof(uint8_t)*bufferSize); //Is this RAII?
 
-    cl::CommandQueue queue(context, device);
+    cl::CommandQueue queue(clContext, clDevice);
 
     while (!stopWorkers) {
         std::cout<<"CLWorker is waiting"<<std::endl;
@@ -357,8 +397,8 @@ void Broth::CLWorker() {
         programKernel.setArg(5, (unsigned int)window->getSize().y);
         programKernel.setArg(6, (unsigned int)this->maxIterations);
 
-        queue.enqueueNDRangeKernel(programKernel, cl::NullRange, cl::NDRange(window->getSize().y));
-        queue.enqueueReadBuffer(outBuffer, CL_FALSE, 0, sizeof(uint8_t)*bufferSize, CBuffer);
+        queue.enqueueNDRangeKernel(programKernel, cl::NullRange, cl::NDRange(std::min(window->getSize().y, maxGroups)));
+        queue.enqueueReadBuffer(outBuffer, CL_FALSE, 0, sizeof(uint8_t)*bufferSize, &CBuffer[0]);
 
         queue.finish();
 
@@ -511,3 +551,35 @@ void Broth::SetOpenCLKernelPath(std::string path) {
     kernelPath = path;
     RestartWorkers();
 }
+
+//a kernel thats guaranteed to work and nothing more
+std::string Broth::defaultKernel =
+    "void kernel mandelkernel(global unsigned char *buffer, double upperLeftRe, double upperLeftIm, double pixelMult, unsigned int width, unsigned int height, unsigned int maxIterations) {"
+    "    "
+    "    int threadID = get_global_id(0);"
+    "    int nThreads = get_global_size(0);"
+    "    "
+    "    for (unsigned int y = (unsigned int)threadID; y < height; y += nThreads) {"
+    "        for (unsigned int x = 0; x < width; x++) {"
+    "            double cRe = upperLeftRe + ((double)x * pixelMult);"
+    "            double cIm = upperLeftIm + ((double)y * pixelMult);"
+    "            double zRe = cRe;"
+    "            double zIm = cIm;"
+    "            "
+    "            unsigned int currentIteration = 0;"
+    "            for (;currentIteration < maxIterations && (zRe*zRe + zIm*zIm) <= 4.f; currentIteration++) {"
+    "                double zReOld = zRe;"
+    "                zRe = (zRe * zRe) - (zIm * zIm);"
+    "                zIm = zReOld * zIm * 2;"
+    "                zRe += cRe;"
+    "                zIm += cIm;"
+    "            }"
+    "            "
+    "            if ((zRe*zRe + zIm*zIm) >= 4.f)"
+    "                buffer[x + (threadID*width)] = 255 - ((float)currentIteration/maxIterations*255);"
+    "            else "
+    "                buffer[x + (threadID*width)] = 0;"
+    "            "
+    "        }"
+    "    }"
+    "}";

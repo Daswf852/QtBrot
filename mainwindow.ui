@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
-    <height>600</height>
+    <width>687</width>
+    <height>352</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -46,7 +46,7 @@
       <item>
        <widget class="QLabel" name="label_4">
         <property name="text">
-         <string>Most values won't change while processing. Buttons will still work if UI hangs.</string>
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;Most values won't change while processing. Buttons will still work if UI hangs.&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;Press reconstruct if the window is &amp;quot;transparent&amp;quot;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignCenter</set>
@@ -68,7 +68,7 @@
            <number>1</number>
           </property>
           <property name="maximum">
-           <number>4096</number>
+           <number>1000000</number>
           </property>
           <property name="value">
            <number>64</number>
@@ -152,13 +152,6 @@
          </widget>
         </item>
         <item>
-         <widget class="QPushButton" name="ReconstructButton">
-          <property name="text">
-           <string>Reconstruct Broth</string>
-          </property>
-         </widget>
-        </item>
-        <item>
          <widget class="QPushButton" name="RelaunchButton">
           <property name="text">
            <string>Relaunch worker(s)</string>
@@ -169,6 +162,44 @@
          <widget class="QPushButton" name="QuitButton">
           <property name="text">
            <string>Quit</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_2">
+        <item>
+         <widget class="QLabel" name="label">
+          <property name="text">
+           <string>New resolution:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSpinBox" name="ResolutionWSpinBox">
+          <property name="minimum">
+           <number>50</number>
+          </property>
+          <property name="maximum">
+           <number>10000</number>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSpinBox" name="ResolutionHSpinBox">
+          <property name="minimum">
+           <number>50</number>
+          </property>
+          <property name="maximum">
+           <number>10000</number>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="ReconstructButton">
+          <property name="text">
+           <string>Reconstruct Broth</string>
           </property>
          </widget>
         </item>

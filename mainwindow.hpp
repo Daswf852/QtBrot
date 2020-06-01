@@ -14,14 +14,19 @@ class MainWindow : public QMainWindow {
     Q_OBJECT
 
     public:
-        MainWindow(Broth &broth, QWidget *parent = nullptr);
+        MainWindow(QWidget *parent = nullptr);
         ~MainWindow();
+
+        void Reconstruct();
 
         QWidget *maxIterationsSpinBox;
         QWidget *threadCountSpinBox;
         QWidget *zoomRatioSpinBox;
         QWidget *drawWhileUpdatingCheckBox;
         QWidget *modeSelectComboBox;
+
+        QWidget *ResolutionWSpinBox;
+        QWidget *ResolutionHSpinBox;
 
         QWidget *lastUpdateLabel;
         QWidget *pixelRatioLabel;
@@ -46,9 +51,15 @@ class MainWindow : public QMainWindow {
 
         void on_FileDialogOpenerButton_clicked();
 
+        void on_ResolutionWSpinBox_valueChanged(int arg1);
+
+        void on_ResolutionHSpinBox_valueChanged(int arg1);
+
 private:
         Ui::MainWindow *ui;
-        Broth &broth;
+        unsigned int targetW = 640;
+        unsigned int targetH = 480;
+        std::unique_ptr<Broth> broth;
 
         void UpdateUI();
         void NotifyCallback();

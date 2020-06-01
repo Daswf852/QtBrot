@@ -104,7 +104,16 @@ class Broth {
         unsigned long long expectedFrameID = 0;
         std::vector<unsigned long long> currentFrameIDs;
 
+        cl::Kernel LoadCLKernel();
+        void SetupCLDevice();
+
         std::string kernelPath = "./kernel.cl";
+        static std::string defaultKernel;
+
+        bool isCLSetUp = false;
+        cl::Context clContext;
+        cl::Device clDevice;
+        unsigned int maxGroups = 0;
 
         //Will first try to stop any existing workers then it will start workers
         void StartWorkers();
